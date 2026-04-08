@@ -1,28 +1,73 @@
-import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 
 export default function HomeScreen() {
   const [task, setTask] = useState('');
   const [tasks, setTasks] = useState([]);
 
-  const addTask = () => {
-    if (task === '') return;
-    setTasks([...tasks, task]);
-    setTask('');
+  const tasksCollectionRef = collection(db, "tasks");
+
+  const fetchTasks = async () => {
+    try {
+      const querySnapshot = await getDocs(tasksCollectionRef);
+      const allTasks = querySnapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      setTasks(allTasks);
+    } catch (err) {
+      console.log("Error fetching tasks:", err);
+    }
   };
 
-  const deleteTask = (index) => {
-    let newTasks = [...tasks];
-    newTasks.splice(index, 1);
-    setTasks(newTasks);
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const addTask = async () => {
+    if (!task.trim()) return;
+    try {
+      await addDoc(tasksCollectionRef, {
+        text: task.trim(),
+        done: false,
+        createdAt: serverTimestamp()
+      });
+      setTask('');
+      fetchTasks();
+    } catch (err) {
+      console.log("Error adding task:", err);
+    }
   };
 
-  const editTask = (index) => {
-    let newText = prompt("Edit tugas:");
-    if (newText) {
-      let newTasks = [...tasks];
-      newTasks[index] = newText;
-      setTasks(newTasks);
+  const deleteTask = async (id) => {
+    try {
+      await deleteDoc(doc(db, "tasks", id));
+      fetchTasks();
+    } catch (err) {
+      console.log("Error deleting task:", err);
+    }
+  };
+
+  const editTask = async (id, currentText) => {
+    const newText = prompt("Edit tugas:", currentText);
+    if (newText && newText.trim()) {
+      try {
+        await updateDoc(doc(db, "tasks", id), { text: newText.trim() });
+        fetchTasks();
+      } catch (err) {
+        console.log("Error editing task:", err);
+      }
+    }
+  };
+
+  const toggleDone = async (id, currentDone) => {
+    try {
+      await updateDoc(doc(db, "tasks", id), { done: !currentDone });
+      fetchTasks();
+    } catch (err) {
+      console.log("Error toggling done:", err);
     }
   };
 
@@ -34,25 +79,32 @@ export default function HomeScreen() {
         <TextInput
           style={styles.input}
           placeholder="Tambah tugas..."
+          placeholderTextColor="#888"
           value={task}
           onChangeText={setTask}
         />
         <TouchableOpacity style={styles.addBtn} onPress={addTask}>
-          <Text style={{ color: 'white' }}>+</Text>
+          <Text style={styles.addBtnText}>+</Text>
         </TouchableOpacity>
       </View>
 
       <FlatList
-        data={tasks}
+        data={tasks.sort((a,b)=> (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0))}
+        keyExtractor={(item) => item.id}
         renderItem={({ item, index }) => (
           <View style={styles.row}>
-            <Text>{index + 1}. {item}</Text>
+            <Text style={[styles.rowText, item.done && styles.doneText]}>
+              {index + 1}. {item.text}
+            </Text>
             <View style={styles.actions}>
-              <TouchableOpacity style={styles.edit} onPress={() => editTask(index)}>
-                <Text>Edit</Text>
+              <TouchableOpacity style={styles.edit} onPress={() => editTask(item.id, item.text)}>
+                <Text style={styles.editText}>Edit</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.delete} onPress={() => deleteTask(index)}>
-                <Text style={{ color: 'white' }}>Hapus</Text>
+              <TouchableOpacity style={styles.delete} onPress={() => deleteTask(item.id)}>
+                <Text style={styles.deleteText}>Hapus</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.doneBtn} onPress={() => toggleDone(item.id, item.done)}>
+                <Text style={styles.doneTextBtn}>{item.done ? "Undo" : "Done"}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -65,49 +117,86 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
     padding: 20,
-    backgroundColor: '#f4f6f9'
+    justifyContent: 'center',
+    backgroundColor: '#121212',
   },
   title: {
-    fontSize: 22,
+    fontSize: 26,
+    fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 15
+    marginBottom: 20,
+    color: 'white',
   },
   inputGroup: {
     flexDirection: 'row',
-    gap: 10
+    gap: 10,
+    marginBottom: 15,
   },
   input: {
     flex: 1,
+    backgroundColor: '#1e1e1e',
+    color: 'white',
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    padding: 10,
-    borderRadius: 8
+    borderColor: '#333',
   },
   addBtn: {
-    backgroundColor: 'green',
-    padding: 10,
-    borderRadius: 8
+    backgroundColor: '#16a34a',
+    padding: 12,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addBtnText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   row: {
-    backgroundColor: 'white',
-    padding: 10,
-    marginTop: 10,
-    borderRadius: 10
+    backgroundColor: '#1e1e1e',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  rowText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  doneText: {
+    textDecorationLine: 'line-through',
+    color: '#888',
   },
   actions: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 5
+    marginTop: 8,
   },
   edit: {
-    backgroundColor: 'yellow',
-    padding: 5,
-    borderRadius: 5
+    backgroundColor: '#facc15',
+    padding: 6,
+    borderRadius: 6,
+  },
+  editText: {
+    fontWeight: 'bold',
   },
   delete: {
-    backgroundColor: 'red',
-    padding: 5,
-    borderRadius: 5
-  }
+    backgroundColor: '#dc2626',
+    padding: 6,
+    borderRadius: 6,
+  },
+  deleteText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  doneBtn: {
+    backgroundColor: '#2563eb',
+    padding: 6,
+    borderRadius: 6,
+  },
+  doneTextBtn: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
 });
