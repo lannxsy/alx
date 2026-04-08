@@ -117,21 +117,24 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    justifyContent: 'center',
     backgroundColor: '#121212',
+    justifyContent: 'center',
+    alignItems: 'center', // <-- tengah horizontal
+    padding: 20,
   },
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
     color: 'white',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   inputGroup: {
     flexDirection: 'row',
     gap: 10,
     marginBottom: 15,
+    width: '100%',
+    maxWidth: 400, // biar kayak card di tengah
   },
   input: {
     flex: 1,
@@ -157,8 +160,11 @@ const styles = StyleSheet.create({
   row: {
     backgroundColor: '#1e1e1e',
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     marginBottom: 10,
+    width: '100%',
+    maxWidth: 400, // card di tengah
+    alignSelf: 'center', // biar benar-benar di tengah
   },
   rowText: {
     color: 'white',
